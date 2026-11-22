@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 import autotag
+import contextualizer
 import embedder
 import normalizer
 import parser
@@ -37,7 +38,16 @@ def _save_manifest(manifest: dict) -> None:
 
 
 def _file_hash(filepath: Path) -> str:
-    return hashlib.sha256(filepath.read_bytes()).hexdigest()
+    """Content hash, tagged with any index settings that change what gets embedded,
+    so switching contextual retrieval or the passage size re-indexes each file once.
+    With the original settings the tag is empty and existing manifests stay valid."""
+    digest = hashlib.sha256(filepath.read_bytes()).hexdigest()
+    tag = ""
+    if config.CONTEXTUAL_CHUNKS:
+        tag += ":ctx"
+    if config.CHUNK_SIZE_TOKENS != 300:
+        tag += f":c{config.CHUNK_SIZE_TOKENS}"
+    return digest + tag
 
 
 def _already_embedded(filepath: Path) -> bool:
@@ -80,12 +90,19 @@ def run_file(filepath: Path) -> dict:
         logger.warning("No chunks produced for %s", filepath.name)
         return {"file": filepath.name, "chunks_added": 0, "tagged": tagged, "skipped": False}
 
-    # 5. Delete stale chunks then re-embed (ensures edits and header renames take effect)
+    # 5. Contextual retrieval: Haiku places each passage within the document
+    missing = 0
+    if config.CONTEXTUAL_CHUNKS:
+        title = str(fm.get("title", filepath.stem))
+        missing = contextualizer.add_context(chunks, f"# {title}\n\n{body_normalized}")
+
+    # 6. Delete stale chunks then re-embed (ensures edits and header renames take effect)
     embedder.delete_file(str(filepath))
     added = embedder.add_chunks(chunks, filepath=str(filepath))
     logger.info("  → %d chunks added (file: %s)", added, filepath.name)
 
-    return {"file": filepath.name, "chunks_added": added, "tagged": tagged, "skipped": False}
+    return {"file": filepath.name, "chunks_added": added, "tagged": tagged, "skipped": False,
+            "context_missing": missing}
 
 
 def run_all(library_path: Path | None = None) -> list[dict]:
@@ -120,8 +137,9 @@ def run_all(library_path: Path | None = None) -> list[dict]:
             continue
         result = run_file(filepath)
         results.append(result)
-        if filepath.exists():
+        if filepath.exists() and not result.get("context_missing"):
             # Hash after autotag, which may have rewritten the frontmatter.
+            # A file with failed context calls stays out, so the next ingest retries it.
             manifest[key] = _file_hash(filepath)
         if n % 200 == 0:
             _save_manifest(manifest)

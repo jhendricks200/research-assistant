@@ -205,9 +205,10 @@ async def ask_endpoint(req: AskRequest) -> StreamingResponse:
             try:
                 with client.messages.stream(
                     model=config.CHAT_MODEL,
-                    max_tokens=1500,
+                    max_tokens=config.CHAT_MAX_TOKENS,
                     system=chat_module._SYSTEM,
                     messages=history_msgs,
+                    **config.CHAT_PARAMS,
                 ) as s:
                     for delta in s.text_stream:
                         asyncio.run_coroutine_threadsafe(

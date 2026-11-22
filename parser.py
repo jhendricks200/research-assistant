@@ -12,13 +12,15 @@ from pathlib import Path
 
 import yaml
 
+import config
+
 logger = logging.getLogger(__name__)
 
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
 WORDS_PER_TOKEN = 0.75  # conservative estimate
-CHUNK_SIZE_TOKENS = 300
+CHUNK_SIZE_TOKENS = config.CHUNK_SIZE_TOKENS
 OVERLAP_TOKENS = 50
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)

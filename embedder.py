@@ -109,20 +109,36 @@ def add_chunks(chunks: list[dict], filepath: str = "") -> int:
         meta = {}
         for k, v in c["metadata"].items():
             meta[k] = v if isinstance(v, (int, float)) else str(v)
+        if c.get("context"):
+            meta["context"] = c["context"]
         metadatas.append(meta)
+
+    # With contextual retrieval the vector is built from context + passage, while
+    # the stored document stays the bare passage that Claude and the reader see.
+    contextual = any(m.get("context") for m in metadatas)
 
     for i in range(0, len(new_ids), batch_size):
         end = i + batch_size
+        kwargs = {}
+        if contextual:
+            kwargs["embeddings"] = _get_ef()([_embed_text(t, m) for t, m in zip(texts[i:end], metadatas[i:end])])
         collection.add(
             ids=new_ids[i:end],
             documents=texts[i:end],
             metadatas=metadatas[i:end],
+            **kwargs,
         )
 
     _kw_add(new_ids, texts, metadatas)
 
     logger.debug("Added %d new chunks (skipped %d existing)", len(new_ids), len(existing))
     return len(new_ids)
+
+
+def _embed_text(text: str, meta: dict) -> str:
+    """What the embedder reads for a passage: its context note, if any, then the passage."""
+    context = meta.get("context") or ""
+    return f"{context}\n\n{text}" if context else text
 
 
 def matches_topic(topics_value: str, topic: str) -> bool:
@@ -215,7 +231,7 @@ def _kw_connect(readonly: bool) -> sqlite3.Connection | None:
 
 
 def _kw_body(text: str, meta: dict) -> str:
-    return f"{meta.get('title') or ''}\n{text}"
+    return f"{meta.get('title') or ''}\n{meta.get('context') or ''}\n{text}"
 
 
 def _kw_add(ids: list[str], texts: list[str], metadatas: list[dict]) -> None:

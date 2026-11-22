@@ -38,6 +38,21 @@ Across all 39 answerable questions, the shipped configuration found the right so
 
 One finding worth knowing: the default embedder only reads the first 256 tokens of each passage, and 81% of passages in my library were longer than that. Smaller chunks are the next experiment, since they are cheaper than a bigger model.
 
+## Contextual retrieval (optional)
+
+A passage cut out of a longer document often loses what made it findable: "revenue grew 3% over the previous quarter" doesn't say whose revenue or which quarter. With `CONTEXTUAL_CHUNKS=true`, Claude Haiku reads each whole document during ingest and writes a 50 to 100 token note placing each passage within it, following Anthropic's [Contextual Retrieval](https://www.anthropic.com/engineering/contextual-retrieval) method. The note is embedded and keyword-indexed together with the passage. Claude still answers from the bare passage, and the sources rail shows the passage unchanged. In Anthropic's tests this cut top-20 retrieval failures by 35% with contextual embeddings alone and by 49% with contextual BM25 as well.
+
+Because MiniLM reads only the first 256 tokens it embeds, the note pushes the end of a 300-token passage out of view. Pair it with smaller passages:
+
+```bash
+CONTEXTUAL_CHUNKS=true
+CHUNK_SIZE_TOKENS=200
+```
+
+Changing either setting re-indexes each file once on the next `main.py ingest`. Notes are cached in `chroma_db/context_cache.sqlite`, so later ingests only pay for new or edited passages. If a Haiku call fails, the passage is indexed without its note and the file is retried on the next ingest. On a library the size of mine (34,000 documents) expect a first run of several hours and, by my estimate at Haiku 5.5 prices, a few tens of dollars. Index a copy first (`CHROMA_PATH=chroma_db_ctx`) and compare with the eval harness before switching over; see "Run the tests".
+
+I haven't measured it on my library yet, so it is off by default until the numbers are in.
+
 ## Run it
 
 You need Python 3.11 or newer and an Anthropic API key.
@@ -88,6 +103,15 @@ The evaluation harness scores retrieval and answers against `eval/questions.json
 
 On the bundled 15-document sample, the shipped configuration found the right source for 10 of 11 answerable questions, and all 11 answers contained the required facts with citations. Keyword search alone scored 11 of 11 there. Source balancing is meant for libraries dominated by one source type, and this small sample has none, so expect it to matter only on larger collections.
 
+To score contextual retrieval, build a second index and run the same commands against it. Results are saved with a `_ctx` suffix next to the plain runs, and the cached rewrites are shared:
+
+```bash
+export CONTEXTUAL_CHUNKS=true CHUNK_SIZE_TOKENS=200 CHROMA_PATH=chroma_db_ctx
+.venv/bin/python main.py ingest
+.venv/bin/python eval/run_eval.py retrieve hybrid_balance
+.venv/bin/python eval/run_eval.py answer hybrid_balance
+```
+
 The reranker and alternate-embedder variants need `requirements-eval.txt`, about 1 GB including torch. Run `eval/embed_bge.py` before the `bge_*` variants.
 
 ## Adding sources
@@ -113,10 +137,11 @@ Missing `topics`, `tags`, `entities`, `status` or `source_type` fields are fille
 |---|---|
 | `main.py` | CLI: ingest, watch, query, stats, chat, keywords |
 | `pipeline.py` | Per-file flow: auto-tag, parse, chunk, normalize, embed. Skips unchanged files using a content hash. |
-| `parser.py` | Frontmatter and section-aware chunking (about 300 tokens with 50 overlap) |
+| `parser.py` | Frontmatter and section-aware chunking (about 300 tokens with 50 overlap, set by `CHUNK_SIZE_TOKENS`) |
 | `autotag.py` | Fills missing metadata with Claude Haiku |
 | `normalizer.py` | Synonym normalization before embedding |
 | `embedder.py` | Vector store, keyword index, fusion and source balancing. Both indexes are updated by the same two write functions. |
+| `contextualizer.py` | Optional contextual retrieval: Haiku-written notes that place each passage in its document, cached |
 | `query_rewriter.py` | Multi-query rewriting with Claude Haiku |
 | `chat.py` | Prompt, context building and the terminal chat |
 | `server.py`, `web/` | FastAPI backend that streams answers, and a single-page web UI with a sources rail |
