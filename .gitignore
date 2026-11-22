@@ -1,0 +1,33 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Your documents and everything derived from them
+/library/
+/chroma_db/
+keyword_index.sqlite
+*.sqlite
+*.sqlite.tmp
+ingest_manifest.json
+
+# Evaluation outputs (contain retrieved text and model answers)
+eval/runs*/
+eval/rewrites*.json
+eval/calls.json
+
+# Environments, caches, model weights
+.venv*/
+venv/
+__pycache__/
+*.pyc
+hf_cache/
+.cache/
+*.safetensors
+*.onnx
+
+# Logs and OS files
+*.log
+.DS_Store
+.claude/
+.pytest_cache/

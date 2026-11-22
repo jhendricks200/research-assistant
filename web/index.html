@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Research Assistant</title>
+    <link rel="icon" href="/static/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="/static/style.css?v=6" />
+  </head>
+  <body>
+    <!-- ── Header ────────────────────────────────────────────────────── -->
+    <header class="ra-header" id="header">
+      <div class="ra-wordmark">
+        <span class="ra-word">RESEARCH</span>
+        <span class="ra-dot" aria-hidden="true"></span>
+        <span class="ra-word">ASSISTANT</span>
+        <span class="ra-kicker">
+          Library
+          <span class="ra-kicker-sep">·</span>
+          <span class="ra-kicker-topic" id="kickerLane">All topics</span>
+        </span>
+      </div>
+
+      <div class="ra-header-actions">
+        <span class="ra-status" id="status" title="Connection to research backend">Live</span>
+
+        <button class="ra-ghost" id="exportBtn" type="button" aria-label="Export conversation as Markdown">
+          Export
+        </button>
+        <button class="ra-ghost" id="newChatBtn" type="button" aria-label="Start new chat">New chat</button>
+      </div>
+    </header>
+
+    <!-- ── Main ──────────────────────────────────────────────────────── -->
+    <main class="ra-main">
+      <nav class="ra-nav" id="nav" aria-label="Sessions">
+        <div class="ra-nav-top">
+          <button class="ra-new-chat" id="newChatHeroBtn" type="button" aria-label="Start new chat">
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M6 1v10M1 6h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            </svg>
+            New chat
+          </button>
+        </div>
+        <div class="ra-nav-body" id="navBody"></div>
+        <div class="ra-nav-footer">
+          <span class="ra-nav-pulse" aria-hidden="true"></span>
+          <span id="navFooter">Live</span>
+        </div>
+      </nav>
+
+      <section class="ra-column" id="conversationColumn">
+        <div class="ra-conversation" id="conversation">
+          <!-- Empty state -->
+          <div class="ra-empty" id="emptyState">
+            <div class="ra-empty-mark">
+              <span class="ra-word">RESEARCH</span>
+              <span class="ra-dot" aria-hidden="true"></span>
+              <span class="ra-word">ASSISTANT</span>
+            </div>
+            <div class="ra-empty-rule">Your documents</div>
+
+            <h1>What do you need to know?</h1>
+
+            <div class="ra-examples">
+              <button class="ra-example" type="button">How does the search combine keywords and meaning?</button>
+              <button class="ra-example" type="button">What did the evaluation show?</button>
+              <button class="ra-example" type="button">Which design decisions were rejected, and why?</button>
+            </div>
+
+            <div class="ra-empty-divider">Or browse by topic</div>
+            <div class="ra-trending" id="emptyTrending"></div>
+          </div>
+
+          <!-- Turns render here -->
+          <div class="ra-turns" id="turns"></div>
+        </div>
+      </section>
+
+      <aside class="ra-rail" id="rail" aria-label="Sources">
+        <div class="ra-rail-header">
+          <div class="ra-rail-header-left">
+            <span class="ra-rail-title">Sources</span>
+            <span class="ra-rail-count" id="railCount"></span>
+          </div>
+          <button type="button" id="railExpandBtn" class="ra-rail-toggle" hidden>Expand all</button>
+        </div>
+        <div class="ra-rail-body" id="railBody">
+          <div class="ra-rail-hint">
+            Citations for the current answer appear here.
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- ── Composer ──────────────────────────────────────────────────── -->
+    <footer class="ra-composer">
+      <form id="composerForm" class="ra-composer-shell" action="#" method="post">
+        <textarea
+          id="input"
+          class="ra-input"
+          rows="1"
+          placeholder="Ask about your documents…"
+          aria-label="Your question"
+          enterkeyhint="send"
+        ></textarea>
+        <div class="ra-composer-toolbar">
+          <div class="ra-composer-tools">
+            <div class="ra-topic ra-topic-composer" id="topicWrap">
+              <button class="ra-tool" id="composerLaneBtn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Filter sources by topic">
+                <svg viewBox="0 0 12 12" aria-hidden="true">
+                  <path d="M1 3h10M3 6h6M5 9h2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                </svg>
+                <span id="composerLaneLabel">All topics</span>
+              </button>
+              <button class="ra-tool ra-topic-clear" id="composerLaneClear" type="button" hidden aria-label="Clear topic filter">×</button>
+              <div class="ra-topic-panel" id="topicPanel" hidden role="listbox">
+                <input
+                  type="search"
+                  class="ra-topic-search"
+                  id="topicSearch"
+                  placeholder="Filter topics…"
+                  autocomplete="off"
+                />
+                <ul class="ra-topic-list" id="topicList"></ul>
+              </div>
+            </div>
+            <button class="ra-tool" id="composerCmdkBtn" type="button" aria-label="Open command palette">
+              <span style="font-size:9px;letter-spacing:0">⌘K</span>
+              Tools
+            </button>
+          </div>
+          <div class="ra-composer-cta">
+            <button id="stopBtn" class="ra-send ra-stop" type="button" aria-label="Stop generating" hidden>
+              <svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true">
+                <rect x="3" y="3" width="8" height="8" fill="currentColor" />
+              </svg>
+            </button>
+            <button id="sendBtn" class="ra-send" type="submit" aria-label="Ask" disabled>
+              <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+                <path d="M3 9h12M10 4l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </form>
+      <p class="ra-composer-foot">
+        <span id="corpusHint">Loading corpus…</span>
+      </p>
+    </footer>
+
+    <!-- ── Slide-over (citation detail) ──────────────────────────────── -->
+    <div class="ra-overlay" id="overlay" hidden></div>
+    <aside class="ra-slideover" id="slideover" hidden aria-label="Source detail">
+      <header class="ra-slideover-header">
+        <span id="slideoverIndex" class="ra-slideover-index"></span>
+        <button id="slideoverClose" class="ra-ghost" type="button" aria-label="Close source">Close</button>
+      </header>
+      <div class="ra-slideover-body" id="slideoverBody"></div>
+      <footer class="ra-slideover-footer">
+        <button id="copyExcerptBtn" class="ra-ghost" type="button" aria-label="Copy excerpt to clipboard">Copy excerpt</button>
+        <button id="openObsidianBtn" class="ra-ghost ra-ghost-accent" type="button" aria-label="Open this note in Obsidian">Open in Obsidian</button>
+      </footer>
+    </aside>
+
+    <script type="module" src="/static/app.js?v=6"></script>
+  </body>
+</html>

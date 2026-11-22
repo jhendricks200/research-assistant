@@ -1,0 +1,12 @@
+{"id":1,"type":"article","q":"What is Agent Rooms and what problem is it trying to solve?","gold":["agent-rooms-readme.md","agent-rooms-codebase-rules.md"],"facts":["promote","fork"]}
+{"id":2,"type":"note","q":"Why did Agent Rooms stop building its own version ledger and lean on existing tools instead?","gold":["agent-rooms-adr-0002-attach-dont-build.md"],"facts":["git","pull request|pr merge|pr-merge|sha-pinned"]}
+{"id":3,"type":"note","q":"Why was the Discord bot approach replaced with a polished web product?","gold":["agent-rooms-adr-0003-polished-core.md"],"facts":["discord","web"]}
+{"id":4,"type":"analysis","q":"How were the Agent Rooms security claims checked, and what did outside reviewers find?","gold":["agent-rooms-reviewers-guide.md"],"facts":["audit","fourteen|14"]}
+{"id":5,"type":"article","q":"How does the lead qualification pipeline decide whether a lead is worth following up?","gold":["lead-qualification-readme.md"],"facts":["hot","warm","cold"]}
+{"id":6,"type":"article","q":"How does the source monitor keep running unattended when a model call fails or a credential is missing?","gold":["llm-source-monitor-readme.md"],"facts":["retr","skip"]}
+{"id":7,"type":"article","q":"What does the transit app refuse to show riders until its data passes quality checks?","gold":["transit-delay-predictor-readme.md"],"facts":["schedule_only|schedule-only|schedule only"]}
+{"id":8,"type":"article","q":"Where does the transit project get its realtime subway data?","gold":["transit-delay-predictor-readme.md"],"facts":["gtfs"]}
+{"id":9,"type":"analysis","q":"What does the name Shiori mean, and how does it shape the design?","gold":["shiori-design-system.md"],"facts":["bookmark"]}
+{"id":10,"type":"article","q":"How does the research assistant combine meaning-based search with keyword search?","gold":["research-assistant-readme.md"],"facts":["reciprocal rank fusion|rrf","bm25|fts5"]}
+{"id":11,"type":"article","q":"What did the held-out evaluation show, and which upgrades were tested but not adopted?","gold":["research-assistant-readme.md"],"facts":["10 of 13","rerank"]}
+{"id":12,"type":"unanswerable","q":"What is the best hiking trail in Yosemite?","gold":[],"facts":[]}

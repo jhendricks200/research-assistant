@@ -1,0 +1,4 @@
+# Optional: only for the reranker and bge-embedder variants in eval/run_eval.py (about 1 GB with torch).
+-r requirements.txt
+sentence-transformers==6.3.0
+torch==2.15.0
