@@ -65,8 +65,9 @@ def _call_haiku(title: str, excerpt: str) -> dict:
         max_tokens=512,
         system=_SYSTEM,
         messages=[{"role": "user", "content": _build_prompt(title, excerpt)}],
+        **config.HAIKU_PARAMS,
     )
-    raw = response.content[0].text.strip()
+    raw = config.text_of(response).strip()
 
     # Strip markdown fences if model adds them anyway
     if raw.startswith("```"):

@@ -125,11 +125,12 @@ def ask(
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
     response = client.messages.create(
         model=config.CHAT_MODEL,
-        max_tokens=1500,
+        max_tokens=config.CHAT_MAX_TOKENS,
         system=_SYSTEM,
         messages=history,
+        **config.CHAT_PARAMS,
     )
-    answer = response.content[0].text
+    answer = config.text_of(response)
     history.append({"role": "assistant", "content": answer})
 
     return answer, history

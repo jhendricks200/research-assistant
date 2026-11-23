@@ -12,6 +12,8 @@ An empty gold list marks a question the library cannot answer; the model should 
 
 Variants (see VARIANTS): baseline, hybrid, balance, hybrid_balance (the shipped default),
 and, with requirements-eval.txt installed, the rerank and bge variants.
+To score contextual retrieval, ingest into a separate index with CONTEXTUAL_CHUNKS=true and
+run the same commands with those settings; results are saved with a _ctx suffix.
 The query rewrites are cached once and reused by every variant, so comparing variants costs nothing.
 API calls are counted in eval/calls.json and capped by EVAL_CALL_CAP (default 30).
 """
@@ -41,6 +43,9 @@ RUNS = EVAL / (f"runs_{QSET}" if QSET else "runs")
 CALLS_FILE = EVAL / "calls.json"
 CALL_CAP = int(os.environ.get("EVAL_CALL_CAP", "30"))
 N_FINAL = 8
+# Runs against a contextual index (CONTEXTUAL_CHUNKS=true) are saved as <variant>_ctx,
+# so they sit next to the plain runs instead of overwriting them.
+TAG = "_ctx" if config.CONTEXTUAL_CHUNKS else ""
 
 
 # ── API client with a hard call counter ───────────────────────────────────
@@ -96,8 +101,9 @@ def sonnet_answer(client, messages) -> str:
     for attempt in range(2):
         _bump()
         try:
-            with client.messages.stream(model=config.CHAT_MODEL, max_tokens=1500,
-                                        system=chat_module._SYSTEM, messages=messages) as s:
+            with client.messages.stream(model=config.CHAT_MODEL, max_tokens=config.CHAT_MAX_TOKENS,
+                                        system=chat_module._SYSTEM, messages=messages,
+                                        **config.CHAT_PARAMS) as s:
                 return s.get_final_text()
         except RETRYABLE:
             if attempt == 1:
@@ -224,9 +230,9 @@ def score_retrieval(variant: str) -> None:
         })
     summ = summarize(rows)
     summ["seconds"] = round(time.time() - t0, 1)
-    (RUNS / f"{variant}.retrieval.json").write_text(json.dumps(rows))
-    (RUNS / f"{variant}.retrieval.summary.json").write_text(json.dumps(summ, indent=1))
-    print(variant, json.dumps(summ))
+    (RUNS / f"{variant}{TAG}.retrieval.json").write_text(json.dumps(rows))
+    (RUNS / f"{variant}{TAG}.retrieval.summary.json").write_text(json.dumps(summ, indent=1))
+    print(variant + TAG, json.dumps(summ))
 
 
 def summarize(rows: list[dict]) -> dict:
@@ -255,10 +261,10 @@ CITE = re.compile(r"\[\d+\]")
 
 
 def answer(variant: str) -> None:
-    rows = json.loads((RUNS / f"{variant}.retrieval.json").read_text())
+    rows = json.loads((RUNS / f"{variant}{TAG}.retrieval.json").read_text())
     qs = {q["id"]: q for q in questions()}
     client = make_client()
-    path = RUNS / f"{variant}.answers.jsonl"
+    path = RUNS / f"{variant}{TAG}.answers.jsonl"
     done = {json.loads(l)["id"] for l in path.read_text().splitlines()} if path.exists() else set()
     with path.open("a") as f:
         for r in rows:
@@ -278,7 +284,7 @@ def answer(variant: str) -> None:
 
 def grade(variant: str) -> None:
     qs = {q["id"]: q for q in questions()}
-    ans = [json.loads(l) for l in (RUNS / f"{variant}.answers.jsonl").read_text().splitlines()]
+    ans = [json.loads(l) for l in (RUNS / f"{variant}{TAG}.answers.jsonl").read_text().splitlines()]
     answerable = [a for a in ans if qs[a["id"]]["gold"]]
     off = [a for a in ans if not qs[a["id"]]["gold"]]
     summ = {
@@ -291,8 +297,8 @@ def grade(variant: str) -> None:
         "declined": sum(a["answer"].startswith("(no passages retrieved")
                         or (bool(DECLINE.search(a["answer"][:600])) and not CITE.search(a["answer"])) for a in off),
     }
-    (RUNS / f"{variant}.answers.summary.json").write_text(json.dumps(summ, indent=1))
-    print(variant, "answers", json.dumps(summ))
+    (RUNS / f"{variant}{TAG}.answers.summary.json").write_text(json.dumps(summ, indent=1))
+    print(variant + TAG, "answers", json.dumps(summ))
 
 
 def do_rewrite() -> None:

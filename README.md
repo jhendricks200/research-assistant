@@ -16,27 +16,46 @@ Optional topic filters apply to both indexes. Conversation history keeps the las
 
 ## Results
 
-I measured everything on my own library before adopting it, using hand-written questions where I knew which document held the answer and which facts a correct answer had to contain. I tuned on a first set of 30 questions. Then I wrote a held-out set of 15 questions, 13 answerable and 2 that the library could not answer, and scored them without changing any settings.
+On questions it had never been tuned against, the assistant answered all 13 answerable ones with every required fact and a citation, up from 9 of 13 with vector search alone. It declined both questions the library couldn't answer.
 
-On the held-out set:
+I measured every change on my own library before adopting it. I wrote questions where I knew which document held the answer and which facts a correct answer had to contain, tuned on a first set of 30, then wrote a held-out set of 15 (13 answerable, 2 not) and scored it once without changing any settings. These runs used Claude Sonnet 4.6 for answers.
 
-| Configuration | Right source in the 8 passages | Right source ranked first | Answers with the required facts |
-|---|---|---|---|
-| Vector search only (before) | 6 of 13 | 2 of 13 | 9 of 13 |
-| Vector + keyword + source balancing (shipped) | 10 of 13 | 5 of 13 | 13 of 13 |
+| Held-out set, 13 answerable | Vector search only (before) | Vector + keyword + source balancing (shipped) |
+|---|---|---|
+| Answers with the required facts | 9 | **13** |
+| Right source in the 8 passages | 6 | **10** |
+| Right source ranked first | 2 | **5** |
+| Unanswerable questions declined | 2 of 2 | 2 of 2 |
 
-Every answer cited its sources, and both unanswerable questions were declined in both configurations. On the tuning set the same change moved the right source into the top 8 on 21 of 26 questions instead of 17, and moved answers with the required facts from 12 of 26 to 23 of 26.
+The tuning set moved the same way: answers with the required facts went from 12 to 23 of 26, and the right source reached the top 8 on 21 questions instead of 17. Every answer cited its sources.
 
-I also tested two heavier changes and did not adopt them, because neither beat the simpler configuration once both question sets were counted:
+### What I tested and left out
 
-| Variant tested (held-out, 13 answerable) | Source in 8 | Ranked first | Cost |
+Two heavier upgrades ranked the right source higher, but neither found it more often once both question sets were counted, so I kept the simpler pipeline:
+
+| Variant (held-out, 13 answerable) | Source in 8 | Ranked first | Cost |
 |---|---|---|---|
 | + cross-encoder reranker (bge-reranker-base, top 40 reranked to 8) | 11 | 7 | about 2 seconds more per question |
 | Stronger embedding model (bge-base-en-v1.5) + keyword + balancing | 10 | 8 | 90-minute re-embed, 2.3 GB more disk |
 
-Across all 39 answerable questions, the shipped configuration found the right source 31 times, the reranker version 32 times, and the stronger embedder version 30 times.
+Across all 39 answerable questions, the shipped pipeline found the right source 31 times, the reranker version 32 and the stronger embedder 30.
 
-One finding worth knowing: the default embedder only reads the first 256 tokens of each passage, and 81% of passages in my library were longer than that. Smaller chunks are the next experiment, since they are cheaper than a bigger model.
+The default embedder reads only the first 256 tokens of each passage, and 81% of passages in my library are longer than that. That is why passage size is now a setting, and why contextual retrieval (below) is paired with shorter passages.
+
+## Contextual retrieval (optional)
+
+A passage cut out of a longer document often loses what made it findable: "revenue grew 3% over the previous quarter" doesn't say whose revenue or which quarter. With `CONTEXTUAL_CHUNKS=true`, Claude Haiku reads each whole document during ingest and writes a 50 to 100 token note placing each passage within it, following Anthropic's [Contextual Retrieval](https://www.anthropic.com/engineering/contextual-retrieval) method. The note is embedded and keyword-indexed together with the passage. Claude still answers from the bare passage, and the sources rail shows the passage unchanged. In Anthropic's tests this cut top-20 retrieval failures by 35% with contextual embeddings alone and by 49% with contextual BM25 as well.
+
+Because MiniLM reads only the first 256 tokens it embeds, the note pushes the end of a 300-token passage out of view. Pair it with smaller passages:
+
+```bash
+CONTEXTUAL_CHUNKS=true
+CHUNK_SIZE_TOKENS=200
+```
+
+Changing either setting re-indexes each file once on the next `main.py ingest`. Notes are cached in `chroma_db/context_cache.sqlite`, so later ingests only pay for new or edited passages. If a Haiku call fails, the passage is indexed without its note and the file is retried on the next ingest. On a library the size of mine (34,000 documents) expect a first run of several hours and, by my estimate at Haiku 5.5 prices, a few tens of dollars. Index a copy first (`CHROMA_PATH=chroma_db_ctx`) and compare with the eval harness before switching over; see "Run the tests".
+
+I haven't measured it on my library yet, so it is off by default until the numbers are in.
 
 ## Run it
 
@@ -86,7 +105,16 @@ The evaluation harness scores retrieval and answers against `eval/questions.json
 .venv/bin/python eval/run_eval.py answer hybrid_balance
 ```
 
-On the bundled 15-document sample, the shipped configuration found the right source for 10 of 11 answerable questions, and all 11 answers contained the required facts with citations. Keyword search alone scored 11 of 11 there. Source balancing is meant for libraries dominated by one source type, and this small sample has none, so expect it to matter only on larger collections.
+On the bundled 15-document sample, with Claude Sonnet 5.5 answering, the shipped configuration put the right source in the 8 passages for all 11 answerable questions and ranked it first for 8. All 11 answers contained the required facts with citations, and the question the library can't answer was declined. The sample is too small to separate retrieval variants: contextual retrieval tied the plain index there, because there were no misses left to fix. Source balancing is meant for libraries dominated by one source type, and this small sample has none, so expect it to matter only on larger collections.
+
+To score contextual retrieval, build a second index and run the same commands against it. Results are saved with a `_ctx` suffix next to the plain runs, and the cached rewrites are shared:
+
+```bash
+export CONTEXTUAL_CHUNKS=true CHUNK_SIZE_TOKENS=200 CHROMA_PATH=chroma_db_ctx
+.venv/bin/python main.py ingest
+.venv/bin/python eval/run_eval.py retrieve hybrid_balance
+.venv/bin/python eval/run_eval.py answer hybrid_balance
+```
 
 The reranker and alternate-embedder variants need `requirements-eval.txt`, about 1 GB including torch. Run `eval/embed_bge.py` before the `bge_*` variants.
 
@@ -113,10 +141,11 @@ Missing `topics`, `tags`, `entities`, `status` or `source_type` fields are fille
 |---|---|
 | `main.py` | CLI: ingest, watch, query, stats, chat, keywords |
 | `pipeline.py` | Per-file flow: auto-tag, parse, chunk, normalize, embed. Skips unchanged files using a content hash. |
-| `parser.py` | Frontmatter and section-aware chunking (about 300 tokens with 50 overlap) |
+| `parser.py` | Frontmatter and section-aware chunking (about 300 tokens with 50 overlap, set by `CHUNK_SIZE_TOKENS`) |
 | `autotag.py` | Fills missing metadata with Claude Haiku |
 | `normalizer.py` | Synonym normalization before embedding |
 | `embedder.py` | Vector store, keyword index, fusion and source balancing. Both indexes are updated by the same two write functions. |
+| `contextualizer.py` | Optional contextual retrieval: Haiku-written notes that place each passage in its document, cached |
 | `query_rewriter.py` | Multi-query rewriting with Claude Haiku |
 | `chat.py` | Prompt, context building and the terminal chat |
 | `server.py`, `web/` | FastAPI backend that streams answers, and a single-page web UI with a sources rail |

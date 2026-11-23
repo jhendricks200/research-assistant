@@ -4,7 +4,7 @@ query_rewriter.py - Turn a raw user question into retrieval-optimized queries.
 MiniLM-L6 (the embedder backing ChromaDB) is a weak, shallow encoder: it often
 misses when the user's vocabulary doesn't match the corpus ("LLM" vs "language
 model", "what about it?" vs the named thing it refers to). This module uses Claude
-Haiku 4.5 to produce:
+Haiku to produce:
 
   1. A standalone version of the question (pronouns/anaphora resolved from
      conversation history).
@@ -137,8 +137,9 @@ def rewrite(
             max_tokens=400,
             system=_SYSTEM,
             messages=[{"role": "user", "content": user_content}],
+            **config.HAIKU_PARAMS,
         )
-        raw = response.content[0].text
+        raw = config.text_of(response)
     except Exception as exc:
         logger.warning("Query rewrite failed: %s - falling back to raw question", exc)
         return [question]

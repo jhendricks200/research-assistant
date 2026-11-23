@@ -27,8 +27,33 @@ COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "documents")
 
 # ── Models ─────────────────────────────────────────────────────────────────
 
-AUTOTAG_MODEL = "claude-haiku-4-5-20251001"
-CHAT_MODEL = "claude-sonnet-4-6"
+# Haiku does the small jobs (auto-tagging, query rewrites, passage context);
+# Sonnet writes the answers.
+AUTOTAG_MODEL = os.environ.get("AUTOTAG_MODEL", "claude-haiku-5-5")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "claude-sonnet-5-5")
+# Sonnet 5.5 always thinks before answering; effort sets how much (low, medium, high).
+CHAT_EFFORT = os.environ.get("CHAT_EFFORT", "medium")
+CHAT_MAX_TOKENS = 8000  # covers thinking plus the answer
+
+# Haiku's jobs are short and mechanical, so they run without extended thinking.
+HAIKU_PARAMS = {"thinking": {"type": "disabled"}}
+CHAT_PARAMS = {"output_config": {"effort": CHAT_EFFORT}}
+
+
+def text_of(response) -> str:
+    """The text of a Messages API response. Newer models can put a thinking block first."""
+    return "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
+
+# ── Contextual retrieval (see README, "Contextual retrieval") ─────────────
+# When on, Haiku writes a short note placing each passage within its document,
+# and that note is embedded and keyword-indexed together with the passage.
+CONTEXTUAL_CHUNKS = os.environ.get("CONTEXTUAL_CHUNKS", "false").strip().lower() in ("1", "true", "yes", "on")
+CONTEXT_WORKERS = int(os.environ.get("CONTEXT_WORKERS", "8"))  # parallel Haiku calls per document
+
+# Passage size in tokens. MiniLM reads only the first 256 tokens of what it
+# embeds, so with contextual retrieval on, smaller passages keep the end of
+# each passage inside that window.
+CHUNK_SIZE_TOKENS = int(os.environ.get("CHUNK_SIZE_TOKENS", "300"))
 
 # ── Frontmatter fields that autotag fills when missing ────────────────────
 
